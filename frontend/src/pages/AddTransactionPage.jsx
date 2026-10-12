@@ -5,26 +5,7 @@ import Toast from '../components/Toast';
 import ReceiptUploadModal from '../components/ReceiptUploadModal';
 import { PlusCircle, ArrowLeft, FileText, Sparkles } from 'lucide-react';
 
-const EXPENSE_CATEGORIES = [
-  'Food',
-  'Transport',
-  'Shopping',
-  'Bills',
-  'Education',
-  'Entertainment',
-  'Healthcare',
-  'Rent',
-  'Other'
-];
-
-const INCOME_CATEGORIES = [
-  'Salary',
-  'Freelance',
-  'Business',
-  'Investment',
-  'Gifts',
-  'Other'
-];
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, getCategoryColor } from '../utils/categoryColors';
 
 const AddTransactionPage = () => {
   const navigate = useNavigate();

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import Modal from '../components/Modal';
+import { getCategoryColor, getCategoryBg } from '../utils/categoryColors';
 import { ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 const MONTH_NAMES = [
@@ -167,7 +168,16 @@ const CalendarPage = () => {
                   </div>
                   <div>
                     <div className="tx-desc">{tx.description || tx.category}</div>
-                    <div className="tx-cat-badge">{tx.category}</div>
+                    <div
+                      className="tx-cat-badge"
+                      style={{
+                        backgroundColor: getCategoryBg(tx.category),
+                        color: getCategoryColor(tx.category),
+                        border: `1px solid ${getCategoryColor(tx.category)}30`
+                      }}
+                    >
+                      {tx.category}
+                    </div>
                   </div>
                 </div>
                 <div className={`tx-amount-val ${tx.type.toLowerCase()}`}>

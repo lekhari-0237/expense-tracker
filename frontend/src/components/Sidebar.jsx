@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   PlusCircle,
   Wallet,
+  Landmark,
   FileSpreadsheet,
   Target,
   Calendar,
@@ -22,6 +23,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/add-transaction', label: 'Add Transaction', icon: PlusCircle },
+    { path: '/bank-sync', label: 'Bank Sync', icon: Landmark },
     { path: '/income', label: 'Monthly Income', icon: Wallet },
     { path: '/export', label: 'Export to PDF/Excel', icon: FileSpreadsheet },
     { path: '/savings', label: 'Savings Goal Tracker', icon: Target },

@@ -12,15 +12,27 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Get all transactions for current user
 router.get('/', protect, async (req, res) => {
     try {
-        const transactions = await Transaction.find({ user: req.user._id }).sort({ date: -1 });
+        const query = { user: req.user._id };
+        if (req.query.source) {
+            query.source = req.query.source;
+        }
+
+        const limit = parseInt(req.query.limit, 10) || 100;
+        const transactions = await Transaction.find(query).sort({ date: -1 }).limit(limit);
+
         const formatted = transactions.map(t => ({
             id: t._id,
             amount: t.amount,
             category: t.category,
             date: t.date.toISOString().split('T')[0],
-            description: t.description,
-            type: t.type
+            description: t.description || t.merchant || t.category,
+            merchant: t.merchant || '',
+            type: t.type,
+            source: t.source || 'manual',
+            externalId: t.externalId || null,
+            syncedAt: t.syncedAt || null
         }));
+
         res.json({ success: true, data: formatted });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -36,7 +48,7 @@ router.post('/upload-receipt', protect, upload.single('file'), async (req, res) 
 
         const formData = new FormData();
         formData.append('file', req.file.buffer, req.file.originalname);
-        formData.append('apikey', process.env.OCR_SPACE_API_KEY || 'helloworld'); // OCR.space API key
+        formData.append('apikey', process.env.OCR_SPACE_API_KEY || 'helloworld');
         formData.append('isOverlayRequired', 'false');
         formData.append('language', 'eng');
         formData.append('OCREngine', '2');
@@ -76,15 +88,9 @@ router.post('/upload-receipt', protect, upload.single('file'), async (req, res) 
         });
     } catch (error) {
         console.error('OCR Error:', error.message);
-        if (error.response) {
-            console.error('OCR API Response Data:', error.response.data);
-        }
-        
         let errorDetails = error.message;
         if (error.response && error.response.data) {
             errorDetails += ' | API Details: ' + JSON.stringify(error.response.data);
-        } else if (error.stack) {
-            errorDetails += ' | Stack: ' + error.stack.split('\n')[1];
         }
 
         res.status(500).json({ 
@@ -97,7 +103,7 @@ router.post('/upload-receipt', protect, upload.single('file'), async (req, res) 
 // Create manual or confirmed transaction
 router.post('/', protect, async (req, res) => {
     try {
-        const { amount, category, date, description, type } = req.body;
+        const { amount, category, date, description, type, source, merchant } = req.body;
         
         const transaction = await Transaction.create({
             user: req.user._id,
@@ -105,7 +111,9 @@ router.post('/', protect, async (req, res) => {
             category,
             date,
             description,
-            type: type || 'EXPENSE'
+            merchant: merchant || description,
+            type: type || 'EXPENSE',
+            source: source || 'manual'
         });
 
         res.status(201).json({
@@ -116,7 +124,9 @@ router.post('/', protect, async (req, res) => {
                 category: transaction.category,
                 date: transaction.date,
                 description: transaction.description,
-                type: transaction.type
+                merchant: transaction.merchant,
+                type: transaction.type,
+                source: transaction.source
             },
             message: 'Transaction added successfully'
         });

@@ -3,19 +3,8 @@ import api from '../services/api';
 import Modal from './Modal';
 import { UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
-const CATEGORIES = [
-  'Food',
-  'Transport',
-  'Shopping',
-  'Bills',
-  'Education',
-  'Entertainment',
-  'Healthcare',
-  'Rent',
-  'Salary',
-  'Freelance',
-  'Other'
-];
+import { EXPENSE_CATEGORIES } from '../utils/categoryColors';
+const CATEGORIES = EXPENSE_CATEGORIES;
 
 const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
   const [selectedFile, setSelectedFile] = useState(null);

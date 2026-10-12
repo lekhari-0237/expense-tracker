@@ -6,21 +6,43 @@ const billSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    title: {
+    billName: {
         type: String,
-        required: [true, 'Please add a title']
+        required: [true, 'Please add a bill name'],
+        trim: true
     },
     amount: {
         type: Number,
-        required: [true, 'Please add an amount']
+        required: [true, 'Please add an amount'],
+        min: [0.01, 'Amount must be greater than 0']
+    },
+    category: {
+        type: String,
+        default: 'Rent'
     },
     dueDate: {
-        type: Date,
+        type: String,
         required: [true, 'Please add a due date']
+    },
+    recurringFrequency: {
+        type: String,
+        enum: ['MONTHLY', 'WEEKLY', 'YEARLY'],
+        default: 'MONTHLY'
+    },
+    reminderDays: {
+        type: Number,
+        default: 3
+    },
+    notes: {
+        type: String,
+        default: ''
     },
     isPaid: {
         type: Boolean,
         default: false
+    },
+    lastPaidDate: {
+        type: Date
     }
 }, { timestamps: true });
 

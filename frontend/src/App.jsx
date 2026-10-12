@@ -4,11 +4,13 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
+import ExpenseAIChatbot from './components/ExpenseAIChatbot';
 
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import AddTransactionPage from './pages/AddTransactionPage';
+import BankSyncPage from './pages/BankSyncPage';
 import IncomePage from './pages/IncomePage';
 import SavingsGoalsPage from './pages/SavingsGoalsPage';
 import CalendarPage from './pages/CalendarPage';
@@ -35,6 +37,7 @@ const ProtectedLayout = () => {
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/add-transaction" element={<AddTransactionPage />} />
+            <Route path="/bank-sync" element={<BankSyncPage />} />
             <Route path="/income" element={<IncomePage />} />
             <Route path="/export" element={<ExportPage />} />
             <Route path="/savings" element={<SavingsGoalsPage />} />
@@ -47,6 +50,8 @@ const ProtectedLayout = () => {
           </Routes>
         </main>
       </div>
+      {/* Global AI Expense Assistant Widget */}
+      <ExpenseAIChatbot />
     </div>
   );
 };

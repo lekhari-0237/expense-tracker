@@ -14,8 +14,13 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/income', require('./routes/income'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/bank', require('./routes/bank'));
+app.use('/api/ai', require('./routes/ai'));
 app.use('/api/bills', require('./routes/bills'));
 app.use('/api/groups', require('./routes/groups'));
+app.use('/api/goals', require('./routes/goals'));
+app.use('/api/loans', require('./routes/loans'));
+app.use('/api/export', require('./routes/export'));
 app.use('/api/notifications', require('./routes/notifications'));
 
 mongoose.connect(process.env.MONGO_URI)
