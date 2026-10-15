@@ -53,10 +53,11 @@ const ExportPage = () => {
       }
 
       const response = await api.get(url, { responseType: 'blob' });
-      const blob = new Blob([response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      // Backend serves SpreadsheetML 2003 XML, not a zipped OOXML workbook.
+      const blob = new Blob([response], { type: 'application/vnd.ms-excel' });
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
-      link.download = `ExpenseTracker_Report_${period}.xlsx`;
+      link.download = `ExpenseTracker_Report_${period}.xls`;
       link.click();
 
       setToast({ message: 'Report downloaded successfully.', type: 'success' });

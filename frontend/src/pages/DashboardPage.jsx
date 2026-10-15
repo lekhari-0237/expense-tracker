@@ -54,6 +54,12 @@ const DashboardPage = () => {
 
   useEffect(() => {
     fetchDashboardData();
+
+    const handleDataChanged = () => {
+      fetchDashboardData();
+    };
+    window.addEventListener('expense-tracker-data-changed', handleDataChanged);
+    return () => window.removeEventListener('expense-tracker-data-changed', handleDataChanged);
   }, [period]);
 
   const fetchDashboardData = async () => {
@@ -190,10 +196,10 @@ const DashboardPage = () => {
               {loading && !summary ? (
                 <span className="skeleton-line" />
               ) : (
-                `₹${summary?.balance?.toLocaleString() || '0'}`
+                `₹${(summary?.currentBalance ?? summary?.balance ?? 0).toLocaleString()}`
               )}
             </div>
-            {summary?.totalIncome === 0 && (
+            {summary && Number(summary?.totalIncome || 0) === 0 && (
               <div style={{ fontSize: '0.72rem', color: 'var(--accent-rose)', marginTop: '4px', fontWeight: '500' }}>
                 Add income to see net balance
               </div>

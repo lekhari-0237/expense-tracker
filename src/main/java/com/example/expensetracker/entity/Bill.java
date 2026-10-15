@@ -36,28 +36,22 @@ public class Bill {
 
     private LocalDateTime updatedAt;
 
-    public Bill() {}
+    public Bill() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
 
     public Bill(User user, String billName, BigDecimal amount, String category, LocalDate dueDate, RecurringFrequency recurringFrequency, Integer reminderDays, String notes) {
         this.user = user;
         this.billName = billName;
         this.amount = amount;
         this.category = category;
-        this.dueDate = dueDate;
-        this.recurringFrequency = recurringFrequency;
+        this.dueDate = dueDate != null ? dueDate : LocalDate.now().plusMonths(1);
+        this.recurringFrequency = recurringFrequency != null ? recurringFrequency : RecurringFrequency.MONTHLY;
         this.reminderDays = reminderDays != null ? reminderDays : 3;
         this.notes = notes;
         this.isPaid = false;
-    }
-
-    @PrePersist
-    protected void onCreate() {
         this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
 

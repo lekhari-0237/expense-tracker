@@ -53,6 +53,28 @@ public class TransactionService {
         return convertToDto(transaction);
     }
 
+    public List<TransactionDto> getFilteredTransactions(LocalDate startDate, LocalDate endDate, String source, Integer limit) {
+        User currentUser = authService.getCurrentAuthenticatedUser();
+        List<Transaction> list;
+        if (startDate != null && endDate != null) {
+            list = transactionRepository.findByUserIdAndDateBetweenOrderByDateDesc(currentUser.getId(), startDate, endDate);
+        } else if (source != null && !source.trim().isEmpty()) {
+            list = transactionRepository.findByUserIdAndSourceOrderByDateDescCreatedAtDesc(currentUser.getId(), source);
+        } else {
+            list = transactionRepository.findByUserIdOrderByDateDescCreatedAtDesc(currentUser.getId());
+        }
+
+        if (source != null && !source.trim().isEmpty() && startDate != null && endDate != null) {
+            list = list.stream().filter(t -> source.equalsIgnoreCase(t.getSource())).collect(Collectors.toList());
+        }
+
+        if (limit != null && limit > 0) {
+            list = list.stream().limit(limit).collect(Collectors.toList());
+        }
+
+        return list.stream().map(this::convertToDto).collect(Collectors.toList());
+    }
+
     @Transactional
     public TransactionDto createTransaction(TransactionDto dto) {
         User currentUser = authService.getCurrentAuthenticatedUser();
@@ -64,6 +86,9 @@ public class TransactionService {
                 dto.getDescription(),
                 dto.getType()
         );
+        transaction.setExternalId(dto.getExternalId());
+        transaction.setSource(dto.getSource());
+        transaction.setMerchant(dto.getMerchant());
         Transaction saved = transactionRepository.save(transaction);
         return convertToDto(saved);
     }
@@ -79,6 +104,9 @@ public class TransactionService {
         transaction.setDate(dto.getDate());
         transaction.setDescription(dto.getDescription());
         transaction.setType(dto.getType());
+        if (dto.getExternalId() != null) transaction.setExternalId(dto.getExternalId());
+        if (dto.getSource() != null) transaction.setSource(dto.getSource());
+        if (dto.getMerchant() != null) transaction.setMerchant(dto.getMerchant());
 
         Transaction updated = transactionRepository.save(transaction);
         return convertToDto(updated);
@@ -93,7 +121,7 @@ public class TransactionService {
     }
 
     public TransactionDto convertToDto(Transaction t) {
-        return new TransactionDto(
+        TransactionDto dto = new TransactionDto(
                 t.getId(),
                 t.getAmount(),
                 t.getCategory(),
@@ -101,5 +129,9 @@ public class TransactionService {
                 t.getDescription(),
                 t.getType()
         );
+        dto.setExternalId(t.getExternalId());
+        dto.setSource(t.getSource());
+        dto.setMerchant(t.getMerchant());
+        return dto;
     }
 }

@@ -4,111 +4,37 @@ const Income = require('../models/Income');
 const SavingsGoal = require('../models/SavingsGoal');
 const Bill = require('../models/Bill');
 const Loan = require('../models/Loan');
+const {
+    resolvePeriod,
+    startOfMonthOffset,
+    endOfMonthOffset,
+    getZoneParts,
+    daysElapsedThisMonth,
+    daysInMonthOffset,
+    formatLongDate,
+    formatShortDate,
+    formatDate,
+    MONTH_NAMES,
+    MONTH_SHORT
+} = require('../utils/dateUtil');
 
 /**
- * Robust Date Range Resolver
- * Returns accurate start and end Date objects for various time periods
+ * Resolve a period name (or explicit range) to { startDate, endDate, label }
+ * using timezone-aware boundaries (APP_TIMEZONE, default Asia/Kolkata).
  */
 function resolveDateRange(periodStr, customStart, customEnd) {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-indexed (0 = Jan)
-
     if (customStart && customEnd) {
-        const s = new Date(customStart);
-        s.setHours(0, 0, 0, 0);
-        const e = new Date(customEnd);
-        e.setHours(23, 59, 59, 999);
-        return { startDate: s, endDate: e, label: `${customStart} to ${customEnd}` };
+        // Date instances are already-resolved timezone-aware boundaries and pass through
+        // untouched; strings are date-only values extended to end of day.
+        const start = new Date(customStart);
+        const end = customEnd instanceof Date ? new Date(customEnd.getTime()) : new Date(new Date(customEnd).setHours(23, 59, 59, 999));
+        return resolvePeriod('custom', {
+            startDate: start,
+            endDate: end,
+            label: `${formatDate(start)} to ${formatDate(end)}`
+        });
     }
-
-    const p = (periodStr || '').toLowerCase().trim();
-
-    if (p === 'today') {
-        const s = new Date(now);
-        s.setHours(0, 0, 0, 0);
-        const e = new Date(now);
-        e.setHours(23, 59, 59, 999);
-        return { startDate: s, endDate: e, label: 'Today' };
-    }
-
-    if (p === 'yesterday') {
-        const s = new Date(now);
-        s.setDate(now.getDate() - 1);
-        s.setHours(0, 0, 0, 0);
-        const e = new Date(now);
-        e.setDate(now.getDate() - 1);
-        e.setHours(23, 59, 59, 999);
-        return { startDate: s, endDate: e, label: 'Yesterday' };
-    }
-
-    if (p === 'this_week' || p === 'current_week') {
-        const s = new Date(now);
-        s.setDate(now.getDate() - now.getDay());
-        s.setHours(0, 0, 0, 0);
-        const e = new Date(now);
-        e.setHours(23, 59, 59, 999);
-        return { startDate: s, endDate: e, label: 'This Week' };
-    }
-
-    if (p === 'last_week' || p === 'previous_week') {
-        const s = new Date(now);
-        s.setDate(now.getDate() - now.getDay() - 7);
-        s.setHours(0, 0, 0, 0);
-        const e = new Date(now);
-        e.setDate(now.getDate() - now.getDay() - 1);
-        e.setHours(23, 59, 59, 999);
-        return { startDate: s, endDate: e, label: 'Last Week' };
-    }
-
-    if (p === 'last_30_days' || p === 'past_30_days') {
-        const s = new Date(now);
-        s.setDate(now.getDate() - 30);
-        s.setHours(0, 0, 0, 0);
-        const e = new Date(now);
-        e.setHours(23, 59, 59, 999);
-        return { startDate: s, endDate: e, label: 'Last 30 Days' };
-    }
-
-    if (p === 'previous_month' || p === 'last_month') {
-        const s = new Date(currentYear, currentMonth - 1, 1);
-        const e = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
-        const mName = s.toLocaleString('default', { month: 'long' });
-        return { startDate: s, endDate: e, label: `Last Month (${mName})` };
-    }
-
-    // Check specific month names (e.g., 'january', 'september')
-    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-    for (let i = 0; i < monthNames.length; i++) {
-        if (p.includes(monthNames[i])) {
-            const s = new Date(currentYear, i, 1);
-            const e = new Date(currentYear, i + 1, 0, 23, 59, 59, 999);
-            const mCapitalized = monthNames[i].charAt(0).toUpperCase() + monthNames[i].slice(1);
-            return { startDate: s, endDate: e, label: `${mCapitalized} ${currentYear}` };
-        }
-    }
-
-    if (p === 'this_year' || p === 'current_year') {
-        const s = new Date(currentYear, 0, 1);
-        const e = new Date(currentYear, 11, 31, 23, 59, 59, 999);
-        return { startDate: s, endDate: e, label: `Year ${currentYear}` };
-    }
-
-    if (p === 'last_year' || p === 'previous_year') {
-        const s = new Date(currentYear - 1, 0, 1);
-        const e = new Date(currentYear - 1, 11, 31, 23, 59, 59, 999);
-        return { startDate: s, endDate: e, label: `Year ${currentYear - 1}` };
-    }
-
-    if (p === 'all_time') {
-        return { startDate: null, endDate: null, label: 'All Time' };
-    }
-
-    // Default to current month
-    const s = new Date(currentYear, currentMonth, 1);
-    const e = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
-    const currMName = s.toLocaleString('default', { month: 'long' });
-    return { startDate: s, endDate: e, label: `This Month (${currMName})` };
+    return resolvePeriod(periodStr);
 }
 
 /**
@@ -154,16 +80,32 @@ function buildQuery(userId, options = {}) {
     return query;
 }
 
+function serializeTransaction(tx) {
+    return {
+        id: tx._id,
+        amount: tx.amount,
+        category: tx.category,
+        description: tx.description || tx.merchant || tx.category,
+        merchant: tx.merchant || '',
+        date: tx.date ? formatDate(tx.date) : '',
+        formattedDate: tx.date ? formatLongDate(tx.date) : '',
+        type: (tx.type || 'EXPENSE').toUpperCase(),
+        source: tx.source || 'manual',
+        paymentMethod: tx.paymentMethod || '',
+        notes: tx.notes || ''
+    };
+}
+
 /**
  * 1. GET MAXIMUM TRANSACTION
  * Returns the highest transaction(s), optionally ranked (rank 1 = highest, 2 = second highest)
  */
 async function getMaxTransaction(userId, options = {}) {
-    const { rank = 1, type, period, category, startDate, endDate } = options;
+    const { rank = 1, type = 'EXPENSE', period, category, startDate, endDate } = options;
     const dateRange = period ? resolveDateRange(period, startDate, endDate) : (startDate && endDate ? resolveDateRange('custom', startDate, endDate) : { startDate: null, endDate: null, label: 'All Time' });
-    
+
     const query = buildQuery(userId, {
-        type: type || (category ? 'EXPENSE' : undefined), // default to expense if category specified, else any
+        type,
         category,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate
@@ -179,34 +121,18 @@ async function getMaxTransaction(userId, options = {}) {
         return { found: false, transaction: null, rank, periodLabel: dateRange.label };
     }
 
-    const tx = transactions[0];
-    return {
-        found: true,
-        rank,
-        periodLabel: dateRange.label,
-        transaction: {
-            id: tx._id,
-            amount: tx.amount,
-            category: tx.category,
-            description: tx.description || tx.merchant || tx.category,
-            merchant: tx.merchant || '',
-            date: tx.date ? tx.date.toISOString().split('T')[0] : '',
-            formattedDate: tx.date ? new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
-            type: (tx.type || 'EXPENSE').toUpperCase(),
-            source: tx.source || 'manual'
-        }
-    };
+    return { found: true, rank, periodLabel: dateRange.label, transaction: serializeTransaction(transactions[0]) };
 }
 
 /**
  * 2. GET MINIMUM TRANSACTION
  */
 async function getMinTransaction(userId, options = {}) {
-    const { rank = 1, type, period, category, startDate, endDate } = options;
+    const { rank = 1, type = 'EXPENSE', period, category, startDate, endDate } = options;
     const dateRange = period ? resolveDateRange(period, startDate, endDate) : { startDate: null, endDate: null, label: 'All Time' };
-    
+
     const query = buildQuery(userId, {
-        type: type || 'EXPENSE',
+        type,
         category,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate
@@ -222,23 +148,7 @@ async function getMinTransaction(userId, options = {}) {
         return { found: false, transaction: null, rank, periodLabel: dateRange.label };
     }
 
-    const tx = transactions[0];
-    return {
-        found: true,
-        rank,
-        periodLabel: dateRange.label,
-        transaction: {
-            id: tx._id,
-            amount: tx.amount,
-            category: tx.category,
-            description: tx.description || tx.merchant || tx.category,
-            merchant: tx.merchant || '',
-            date: tx.date ? tx.date.toISOString().split('T')[0] : '',
-            formattedDate: tx.date ? new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
-            type: (tx.type || 'EXPENSE').toUpperCase(),
-            source: tx.source || 'manual'
-        }
-    };
+    return { found: true, rank, periodLabel: dateRange.label, transaction: serializeTransaction(transactions[0]) };
 }
 
 /**
@@ -311,8 +221,9 @@ async function getTotalIncome(userId, options = {}) {
 
     // Check fixed income fallback if no income transactions recorded for the month
     if (total === 0 && dateRange.startDate) {
-        const monthNum = dateRange.startDate.getMonth() + 1;
-        const yearNum = dateRange.startDate.getFullYear();
+        const zParts = getZoneParts(dateRange.startDate);
+        const monthNum = zParts.month;
+        const yearNum = zParts.year;
         const fixedInc = await Income.findOne({
             user: userId,
             month: monthNum,
@@ -404,8 +315,8 @@ async function getCategoryBreakdown(userId, options = {}) {
  * 7. GET RECENT TRANSACTIONS
  */
 async function getRecentTransactions(userId, options = {}) {
-    const { limit = 5, type, category, minAmount, maxAmount, search, period } = options;
-    const dateRange = period ? resolveDateRange(period) : { startDate: null, endDate: null };
+    const { limit = 5, type, category, minAmount, maxAmount, search, period, startDate, endDate } = options;
+    const dateRange = (startDate && endDate) ? resolveDateRange('custom', startDate, endDate) : (period ? resolveDateRange(period) : { startDate: null, endDate: null });
 
     const query = buildQuery(userId, {
         type,
@@ -419,19 +330,129 @@ async function getRecentTransactions(userId, options = {}) {
 
     const txns = await Transaction.find(query)
         .sort({ date: -1, createdAt: -1 })
-        .limit(Math.min(20, parseInt(limit, 10) || 5));
+        .limit(Math.min(50, parseInt(limit, 10) || 5));
 
-    return txns.map(t => ({
-        id: t._id,
-        amount: t.amount,
-        category: t.category,
-        description: t.description || t.merchant || t.category,
-        merchant: t.merchant || '',
-        date: t.date ? t.date.toISOString().split('T')[0] : '',
-        formattedDate: t.date ? new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
-        type: (t.type || 'EXPENSE').toUpperCase(),
-        source: t.source || 'manual'
-    }));
+    return txns.map(serializeTransaction);
+}
+
+/**
+ * 7b. GET MONTHLY SPENDING TREND (last N calendar months, including the current one)
+ */
+async function getMonthlyTrend(userId, monthCount = 6) {
+    const n = Math.max(1, Math.min(24, parseInt(monthCount, 10) || 6));
+    const rows = await Transaction.aggregate([
+        {
+            $match: {
+                user: new mongoose.Types.ObjectId(userId),
+                date: { $gte: startOfMonthOffset(-(n - 1)) }
+            }
+        },
+        {
+            $group: {
+                _id: {
+                    year: { $year: { date: '$date', timezone: process.env.APP_TIMEZONE || 'Asia/Kolkata' } },
+                    month: { $month: { date: '$date', timezone: process.env.APP_TIMEZONE || 'Asia/Kolkata' } }
+                },
+                expenses: {
+                    $sum: {
+                        $cond: [
+                            { $in: ['$type', ['EXPENSE', 'expense']] },
+                            '$amount',
+                            0
+                        ]
+                    }
+                },
+                income: {
+                    $sum: {
+                        $cond: [
+                            { $in: ['$type', ['INCOME', 'income']] },
+                            '$amount',
+                            0
+                        ]
+                    }
+                },
+                count: { $sum: 1 }
+            }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } }
+    ]);
+
+    const byKey = {};
+    for (const r of rows) {
+        byKey[`${r._id.year}-${r._id.month}`] = {
+            year: r._id.year,
+            month: r._id.month,
+            expenses: Math.round(r.expenses * 100) / 100,
+            income: Math.round(r.income * 100) / 100,
+            count: r.count
+        };
+    }
+
+    const months = [];
+    for (let i = -(n - 1); i <= 0; i++) {
+        const s = getZoneParts(startOfMonthOffset(i));
+        const key = `${s.year}-${s.month}`;
+        const data = byKey[key] || { expenses: 0, income: 0, count: 0 };
+        months.push({
+            label: `${MONTH_NAMES[s.month - 1][0].toUpperCase() + MONTH_NAMES[s.month - 1].slice(1)} ${s.year}`,
+            shortLabel: `${MONTH_SHORT[s.month - 1]} ${String(s.year).slice(2)}`,
+            year: s.year,
+            month: s.month,
+            expenses: data.expenses,
+            income: data.income,
+            count: data.count,
+            isCurrent: i === 0
+        });
+    }
+    return months;
+}
+
+/**
+ * 7c. GET AVERAGE DAILY SPENDING for a period.
+ * For the current month, divides by days elapsed so far; for complete
+ * periods, divides by the number of days in the period.
+ */
+async function getDailyAverage(userId, options = {}) {
+    const { period, startDate, endDate } = options;
+    const hasCustomRange = !!(startDate && endDate);
+    const effectivePeriod = hasCustomRange ? null : (period || 'current_month');
+    const dateRange = resolveDateRange(effectivePeriod, startDate, endDate);
+    const expenseData = await getTotalExpenses(userId, { period: effectivePeriod, startDate, endDate });
+
+    let days;
+    if (hasCustomRange) {
+        days = Math.max(1, Math.round((dateRange.endDate.getTime() - dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    } else if (effectivePeriod === 'current_month' || effectivePeriod === 'this_month') {
+        days = daysElapsedThisMonth();
+    } else if (effectivePeriod === 'today') {
+        days = 1;
+    } else if (effectivePeriod === 'yesterday') {
+        days = 1;
+    } else if (effectivePeriod === 'this_week' || effectivePeriod === 'last_7_days') {
+        days = 7;
+    } else if (effectivePeriod === 'last_week') {
+        days = 7;
+    } else if (effectivePeriod === 'last_30_days') {
+        days = 30;
+    } else if (effectivePeriod === 'previous_month' || effectivePeriod === 'last_month') {
+        days = daysInMonthOffset(-1);
+    } else if (dateRange.startDate && dateRange.endDate) {
+        days = Math.max(1, Math.round((dateRange.endDate.getTime() - dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    } else {
+        // all_time / this_year: days from first transaction (fallback: days elapsed this year)
+        const first = await Transaction.findOne({ user: userId, type: { $in: ['EXPENSE', 'expense'] } }).sort({ date: 1 });
+        const from = first && first.date ? new Date(first.date) : dateRange.startDate;
+        days = from ? Math.max(1, Math.round((Date.now() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 1;
+    }
+
+    const average = days > 0 ? Math.round((expenseData.total / days) * 100) / 100 : 0;
+    return {
+        total: expenseData.total,
+        count: expenseData.count,
+        days,
+        average,
+        periodLabel: dateRange.label
+    };
 }
 
 /**
@@ -562,6 +583,8 @@ module.exports = {
     getBalance,
     getCategoryBreakdown,
     getRecentTransactions,
+    getMonthlyTrend,
+    getDailyAverage,
     comparePeriods,
     getSavingsGoalsData,
     getBillsData,

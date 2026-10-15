@@ -40,6 +40,16 @@ const transactionSchema = new mongoose.Schema({
     },
     syncedAt: {
         type: Date
+    },
+    paymentMethod: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    notes: {
+        type: String,
+        trim: true,
+        default: ''
     }
 }, {
     timestamps: true

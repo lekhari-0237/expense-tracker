@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   PlusCircle,
   Wallet,
+  PiggyBank,
   Landmark,
   FileSpreadsheet,
   Target,
@@ -14,7 +15,8 @@ import {
   HandCoins,
   Inbox,
   LogOut,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -22,11 +24,13 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/chat', label: 'AI Assistant', icon: Sparkles },
     { path: '/add-transaction', label: 'Add Transaction', icon: PlusCircle },
     { path: '/bank-sync', label: 'Bank Sync', icon: Landmark },
     { path: '/income', label: 'Monthly Income', icon: Wallet },
     { path: '/export', label: 'Export to PDF/Excel', icon: FileSpreadsheet },
     { path: '/savings', label: 'Savings Goal Tracker', icon: Target },
+    { path: '/budgets', label: 'Budget Manager', icon: PiggyBank },
     { path: '/calendar', label: 'Calendar View', icon: Calendar },
     { path: '/shared-expenses', label: 'Shared/Group Expenses', icon: Users },
     { path: '/bills', label: 'Bill Due Date Reminders', icon: Bell },

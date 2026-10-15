@@ -95,6 +95,7 @@ const BankSyncPage = () => {
           type: res.data.newImported > 0 ? 'success' : 'info'
         });
         fetchBankData();
+        window.dispatchEvent(new CustomEvent('expense-tracker-data-changed'));
       }
     } catch (err) {
       setToast({ message: err.message || 'Unable to sync transactions. Please try again.', type: 'error' });

@@ -16,6 +16,14 @@ public class User {
     @JsonIgnore
     private String passwordHash;
 
+    private Boolean bankConnected = false;
+
+    private String bankName;
+
+    private String bankAccountMask;
+
+    private LocalDateTime bankLastSynced;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -51,6 +59,38 @@ public class User {
 
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    public Boolean getBankConnected() {
+        return bankConnected;
+    }
+
+    public void setBankConnected(Boolean bankConnected) {
+        this.bankConnected = bankConnected;
+    }
+
+    public String getBankName() {
+        return bankName;
+    }
+
+    public void setBankName(String bankName) {
+        this.bankName = bankName;
+    }
+
+    public String getBankAccountMask() {
+        return bankAccountMask;
+    }
+
+    public void setBankAccountMask(String bankAccountMask) {
+        this.bankAccountMask = bankAccountMask;
+    }
+
+    public LocalDateTime getBankLastSynced() {
+        return bankLastSynced;
+    }
+
+    public void setBankLastSynced(LocalDateTime bankLastSynced) {
+        this.bankLastSynced = bankLastSynced;
     }
 
     public LocalDateTime getCreatedAt() {

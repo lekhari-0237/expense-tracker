@@ -7,6 +7,15 @@ import { PlusCircle, ArrowLeft, FileText, Sparkles } from 'lucide-react';
 
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, getCategoryColor } from '../utils/categoryColors';
 
+// Values match what ExpenseBot stores in the same Transaction field.
+const PAYMENT_METHODS = [
+  { value: 'UPI', label: 'UPI' },
+  { value: 'Cash', label: 'Cash' },
+  { value: 'Card', label: 'Card' },
+  { value: 'NetBanking', label: 'Net Banking' },
+  { value: 'Wallet', label: 'Wallet' },
+];
+
 const AddTransactionPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -18,6 +27,8 @@ const AddTransactionPage = () => {
   const [category, setCategory] = useState(initialType === 'INCOME' ? 'Salary' : 'Food');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [notes, setNotes] = useState('');
 
   React.useEffect(() => {
     const newType = queryParams.get('type') === 'INCOME' ? 'INCOME' : 'EXPENSE';
@@ -44,6 +55,8 @@ const AddTransactionPage = () => {
         date,
         description,
         type,
+        paymentMethod,
+        notes,
       });
 
       if (res.success) {
@@ -175,6 +188,35 @@ const AddTransactionPage = () => {
             />
           </div>
 
+          <div className="form-group">
+            <label className="form-label">Payment Method (Optional)</label>
+            <select
+              className="form-control"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+            >
+              <option value="">Not recorded</option>
+              {PAYMENT_METHODS.map((method) => (
+                <option key={method.value} value={method.value}>
+                  {method.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Notes (Optional)</label>
+            <textarea
+              className="form-control"
+              rows={3}
+              maxLength={200}
+              placeholder="e.g. Split with roommate, reimbursed next month"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+            <div className="notes-hint">{notes.length}/200</div>
+          </div>
+
           <div className="form-actions">
             <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
               <PlusCircle size={18} /> {submitting ? 'Saving...' : (type === 'INCOME' ? 'Add Income' : 'Add Transaction')}
@@ -278,6 +320,18 @@ const AddTransactionPage = () => {
 
         .form-actions {
           margin-top: 2rem;
+        }
+
+        .notes-hint {
+          margin-top: 0.3rem;
+          font-size: 0.75rem;
+          color: var(--text-secondary);
+          text-align: right;
+        }
+
+        textarea.form-control {
+          resize: vertical;
+          font-family: inherit;
         }
       `}</style>
     </div>

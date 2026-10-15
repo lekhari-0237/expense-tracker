@@ -11,6 +11,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
+  const [manualEntry, setManualEntry] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Form fields for confirm step
@@ -27,6 +28,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
       setSelectedFile(file);
       setPreviewUrl(URL.createObjectURL(file));
       setScanResult(null);
+      setManualEntry(false);
       setErrorMsg('');
     }
   };
@@ -36,6 +38,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
 
     setScanning(true);
     setErrorMsg('');
+    setManualEntry(false);
 
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -50,6 +53,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
       if (res.success && res.data) {
         const data = res.data;
         setScanResult(data);
+        setManualEntry(false);
         setAmount(data.amount != null ? data.amount.toString() : '');
         setDescription(data.merchantName || '');
         setDate(data.date || new Date().toISOString().split('T')[0]);
@@ -58,9 +62,11 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
         }
       } else {
         setErrorMsg(res.message || 'Could not process receipt');
+        setManualEntry(true);
       }
     } catch (err) {
       setErrorMsg(err.message || 'Failed to scan receipt image');
+      setManualEntry(true);
     } finally {
       setScanning(false);
     }
@@ -98,6 +104,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
     setSelectedFile(null);
     setPreviewUrl(null);
     setScanResult(null);
+    setManualEntry(false);
     setErrorMsg('');
     setAmount('');
     setDescription('');
@@ -116,7 +123,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
           </div>
         )}
 
-        {!scanResult ? (
+        {!scanResult && !manualEntry ? (
           <div className="upload-step">
             <div
               className={`dropzone ${selectedFile ? 'has-file' : ''}`}
@@ -166,16 +173,27 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
         ) : (
           <form onSubmit={handleConfirmTransaction} className="confirm-step">
             <div className="scan-status-banner">
-              <CheckCircle2 size={20} className="check-icon" />
+              {scanResult ? <CheckCircle2 size={20} className="check-icon" /> : <FileText size={20} className="check-icon" />}
               <div>
                 <div className="scan-status-title">
-                  {scanResult.confidence?.level === 'LOW'
-                    ? 'Receipt Scanned (Please Verify)'
-                    : '✓ Receipt Scanned Successfully'}
+                  {!scanResult
+                    ? 'Enter the receipt details by hand'
+                    : scanResult.confidence?.level === 'LOW'
+                      ? 'Receipt Scanned (Please Verify)'
+                      : '✓ Receipt Scanned Successfully'}
                 </div>
-                <div className="scan-status-msg">{scanResult.message}</div>
+                <div className="scan-status-msg">
+                  {scanResult ? scanResult.message : 'Automatic extraction did not run, so nothing has been read from this image. Your photo stays here — save the expense once you have typed the amount.'}
+                </div>
               </div>
             </div>
+
+            {!scanResult && previewUrl && (
+              <div className="preview-box">
+                <img src={previewUrl} alt="Receipt Preview" className="receipt-preview-img" />
+                <span className="file-name">{selectedFile?.name}</span>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Total Amount (₹)</label>
@@ -183,7 +201,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
                 type="number"
                 step="0.01"
                 className="form-control"
-                placeholder={scanResult.amount ? "e.g. 450.00" : "Not detected — enter amount manually"}
+                placeholder={scanResult?.amount ? "e.g. 450.00" : "Not detected — enter amount manually"}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 required
@@ -195,7 +213,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
               <input
                 type="text"
                 className="form-control"
-                placeholder={scanResult.merchantName ? "e.g. Starbucks Coffee" : "Not detected — enter store name"}
+                placeholder={scanResult?.merchantName ? "e.g. Starbucks Coffee" : "Not detected — enter store name"}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 required
@@ -229,7 +247,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
               />
             </div>
 
-            {scanResult.rawText && (
+            {scanResult?.rawText && (
               <div className="raw-text-toggle-section">
                 <button
                   type="button"
@@ -248,9 +266,9 @@ const ReceiptUploadModal = ({ isOpen, onClose, onTransactionAdded }) => {
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setScanResult(null)}
+                onClick={() => { setScanResult(null); setManualEntry(false); }}
               >
-                Re-scan Photo
+                {scanResult ? 'Re-scan Photo' : 'Choose Another Photo'}
               </button>
               <button
                 type="submit"

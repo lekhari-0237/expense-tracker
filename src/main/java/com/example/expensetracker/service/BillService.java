@@ -34,13 +34,17 @@ public class BillService {
     @Transactional
     public BillDto createBill(BillDto dto) {
         User currentUser = authService.getCurrentAuthenticatedUser();
+        LocalDate dueDate = dto.getDueDate();
+        if (dueDate == null) {
+            dueDate = LocalDate.now().plusMonths(1);
+        }
         Bill bill = new Bill(
                 currentUser,
                 dto.getBillName(),
                 dto.getAmount(),
                 dto.getCategory(),
-                dto.getDueDate(),
-                dto.getRecurringFrequency(),
+                dueDate,
+                dto.getRecurringFrequency() != null ? dto.getRecurringFrequency() : com.example.expensetracker.entity.RecurringFrequency.MONTHLY,
                 dto.getReminderDays(),
                 dto.getNotes()
         );
@@ -100,7 +104,9 @@ public class BillService {
         dto.setIsPaid(b.getIsPaid());
 
         LocalDate today = LocalDate.now();
-        int days = (int) ChronoUnit.DAYS.between(today, b.getDueDate());
+        LocalDate due = b.getDueDate() != null ? b.getDueDate() : today.plusMonths(1);
+        dto.setDueDate(due);
+        int days = (int) ChronoUnit.DAYS.between(today, due);
         dto.setDaysRemaining(days);
 
         if (b.getIsPaid()) {

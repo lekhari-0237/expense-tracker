@@ -129,12 +129,23 @@ router.post('/', protect, async (req, res) => {
                 message: 'Please provide personName, type, amount, and dateGivenTaken.'
             });
         }
+        // Invalid enums/values must not reach Mongoose and surface as a 500
+        if (!['LENT', 'BORROWED'].includes(String(type).toUpperCase())) {
+            return res.status(400).json({ success: false, message: 'Type must be LENT or BORROWED.' });
+        }
+        const loanAmount = parseFloat(amount);
+        if (!isFinite(loanAmount) || loanAmount <= 0) {
+            return res.status(400).json({ success: false, message: 'Amount must be a positive number.' });
+        }
+        if (isNaN(new Date(dateGivenTaken).getTime())) {
+            return res.status(400).json({ success: false, message: 'dateGivenTaken must be a valid date (YYYY-MM-DD).' });
+        }
 
         const loan = await Loan.create({
             user: req.user._id,
             personName: personName.trim(),
-            type,
-            amount: parseFloat(amount),
+            type: String(type).toUpperCase(),
+            amount: loanAmount,
             dateGivenTaken,
             dueDate: dueDate || null,
             reminderDays: reminderDays !== undefined ? parseInt(reminderDays, 10) : 3,

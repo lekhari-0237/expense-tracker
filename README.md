@@ -116,8 +116,25 @@ USE expense_tracker;
 ## OCR Configuration
 The project uses the **OCR.space Cloud API** (Engine 2) for receipt scanning and text extraction.
 - **Environment Variable**: `OCR_SPACE_API_KEY`
-- **Default Fallback**: Uses the public free testing key `"helloworld"` automatically if the environment variable is unset.
+- **Node backend**: receipt scanning answers `503` with a clear message when `OCR_SPACE_API_KEY` is not set — no shared demo key is bundled in the code, and expenses can still be added manually.
+- **Legacy Spring Boot backend**: still falls back to the public testing key `helloworld` when the variable is unset.
 - **Production Setup**: On Render, add `OCR_SPACE_API_KEY` under the Web Service Environment Variables.
+
+---
+
+## Automated Tests
+
+Zero-dependency suites start a real HTTP server against an **isolated MongoDB test database**
+(`expense_tracker_test`, override with `TEST_MONGO_DB`). They refuse to run if the test database name
+equals the production one, and Gemini is disabled so results are deterministic.
+
+```bash
+cd backend
+node tests/chatbot.acceptance.test.js         # ExpenseBot intents, memory, destructive ops, auth
+node tests/shared-expenses.acceptance.test.js # group members, exact splits, balances, ownership
+node tests/regression.acceptance.test.js      # auth, transactions, dashboard, income, bank, OCR route, bills, goals, loans, notifications, exports, 404
+```
+
 
 ---
 

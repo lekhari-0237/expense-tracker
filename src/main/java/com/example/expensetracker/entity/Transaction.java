@@ -26,6 +26,12 @@ public class Transaction {
 
     private TransactionType type;
 
+    private String externalId;
+
+    private String source;
+
+    private String merchant;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -97,6 +103,30 @@ public class Transaction {
 
     public void setType(TransactionType type) {
         this.type = type;
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
+    }
+
+    public String getMerchant() {
+        return merchant;
+    }
+
+    public void setMerchant(String merchant) {
+        this.merchant = merchant;
     }
 
     public LocalDateTime getCreatedAt() {

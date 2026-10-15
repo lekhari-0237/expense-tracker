@@ -28,14 +28,11 @@ public class TransactionController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<TransactionDto>>> getAllTransactions(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) Integer limit) {
         
-        List<TransactionDto> transactions;
-        if (startDate != null && endDate != null) {
-            transactions = transactionService.getTransactionsBetween(startDate, endDate);
-        } else {
-            transactions = transactionService.getAllTransactions();
-        }
+        List<TransactionDto> transactions = transactionService.getFilteredTransactions(startDate, endDate, source, limit);
         return ResponseEntity.ok(ApiResponse.success("Fetched transactions successfully", transactions));
     }
 

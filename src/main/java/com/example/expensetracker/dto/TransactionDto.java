@@ -25,6 +25,12 @@ public class TransactionDto {
     @NotNull(message = "Transaction type is required")
     private TransactionType type;
 
+    private String externalId;
+
+    private String source;
+
+    private String merchant;
+
     public TransactionDto() {}
 
     public TransactionDto(String id, BigDecimal amount, String category, LocalDate date, String description, TransactionType type) {
@@ -82,5 +88,29 @@ public class TransactionDto {
 
     public void setType(TransactionType type) {
         this.type = type;
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
+    }
+
+    public String getMerchant() {
+        return merchant;
+    }
+
+    public void setMerchant(String merchant) {
+        this.merchant = merchant;
     }
 }

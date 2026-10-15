@@ -20,7 +20,7 @@ public class Notification {
 
     private NotificationType type;
 
-    private Long referenceId;
+    private String referenceId;
 
     private NotificationPriority priority;
 
@@ -32,7 +32,7 @@ public class Notification {
         this.createdAt = LocalDateTime.now();
     }
 
-    public Notification(User user, String title, String message, NotificationType type, Long referenceId, NotificationPriority priority) {
+    public Notification(User user, String title, String message, NotificationType type, String referenceId, NotificationPriority priority) {
         this.user = user;
         this.title = title;
         this.message = message;
@@ -83,11 +83,11 @@ public class Notification {
         this.type = type;
     }
 
-    public Long getReferenceId() {
+    public String getReferenceId() {
         return referenceId;
     }
 
-    public void setReferenceId(Long referenceId) {
+    public void setReferenceId(String referenceId) {
         this.referenceId = referenceId;
     }
 

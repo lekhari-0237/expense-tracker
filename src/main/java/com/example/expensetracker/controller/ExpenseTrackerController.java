@@ -30,7 +30,7 @@ public class ExpenseTrackerController {
     }
 
     @GetMapping("/expenses/{id}")
-    public ResponseEntity<ApiResponse<TransactionDto>> getExpenseById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<TransactionDto>> getExpenseById(@PathVariable String id) {
         TransactionDto dto = transactionService.getTransactionById(id);
         return ResponseEntity.ok(ApiResponse.success("Fetched expense successfully", dto));
     }
@@ -45,7 +45,7 @@ public class ExpenseTrackerController {
     }
 
     @PutMapping("/expenses/{id}")
-    public ResponseEntity<ApiResponse<TransactionDto>> updateExpense(@PathVariable Long id, @Valid @RequestBody TransactionDto dto) {
+    public ResponseEntity<ApiResponse<TransactionDto>> updateExpense(@PathVariable String id, @Valid @RequestBody TransactionDto dto) {
         if (dto.getType() == null) {
             dto.setType(TransactionType.EXPENSE);
         }
@@ -54,7 +54,7 @@ public class ExpenseTrackerController {
     }
 
     @DeleteMapping("/expenses/{id}")
-    public ResponseEntity<ApiResponse<Object>> deleteExpense(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Object>> deleteExpense(@PathVariable String id) {
         transactionService.deleteTransaction(id);
         return ResponseEntity.ok(ApiResponse.success("Expense deleted successfully"));
     }

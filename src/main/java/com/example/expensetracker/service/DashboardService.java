@@ -76,7 +76,48 @@ public class DashboardService {
 
         String periodName = getPeriodDisplayName(period, startDate, endDate);
 
-        return new DashboardSummaryDto(totalIncome, totalExpenses, currentBalance, savings, savingsPercentage, periodName);
+        long transactionCount = transactionRepository.findByUserIdAndDateBetweenOrderByDateDesc(
+                currentUser.getId(), startDate, endDate).size();
+
+        DashboardSummaryDto dto = new DashboardSummaryDto(
+                totalIncome, totalExpenses, currentBalance, savings, savingsPercentage, periodName, transactionCount);
+
+        // Month-over-month comparison
+        YearMonth curYM = YearMonth.now();
+        YearMonth prevYM = curYM.minusMonths(1);
+        BigDecimal thisMonthExpense = transactionRepository.sumAmountByUserIdAndTypeAndDateBetween(
+                currentUser.getId(), TransactionType.EXPENSE, curYM.atDay(1), curYM.atEndOfMonth());
+        if (thisMonthExpense == null) thisMonthExpense = BigDecimal.ZERO;
+
+        BigDecimal lastMonthExpense = transactionRepository.sumAmountByUserIdAndTypeAndDateBetween(
+                currentUser.getId(), TransactionType.EXPENSE, prevYM.atDay(1), prevYM.atEndOfMonth());
+        if (lastMonthExpense == null) lastMonthExpense = BigDecimal.ZERO;
+
+        BigDecimal difference = thisMonthExpense.subtract(lastMonthExpense);
+        String direction = difference.compareTo(BigDecimal.ZERO) >= 0 ? "increased" : "decreased";
+        Double percentageChange = 0.0;
+        if (lastMonthExpense.compareTo(BigDecimal.ZERO) > 0) {
+            percentageChange = difference.abs().multiply(new BigDecimal(100))
+                    .divide(lastMonthExpense, 1, RoundingMode.HALF_UP).doubleValue();
+        }
+
+        Map<String, Object> comparison = new HashMap<>();
+        comparison.put("thisMonthExpense", thisMonthExpense);
+        comparison.put("lastMonthExpense", lastMonthExpense);
+        comparison.put("difference", difference);
+        comparison.put("direction", direction);
+        comparison.put("percentageChange", percentageChange);
+        dto.setComparison(comparison);
+
+        // Bank info for header / strip
+        Map<String, Object> bankInfo = new HashMap<>();
+        boolean connected = currentUser.getBankConnected() != null && currentUser.getBankConnected();
+        bankInfo.put("connected", connected);
+        long syncedCount = transactionRepository.countByUserIdAndSource(currentUser.getId(), "mock_bank");
+        bankInfo.put("bankTransactionsCount", syncedCount);
+        dto.setBankInfo(bankInfo);
+
+        return dto;
     }
 
     public List<CategorySummaryDto> getCategorySummary(String period, LocalDate customStartDate, LocalDate customEndDate) {
@@ -141,6 +182,15 @@ public class DashboardService {
             YearMonth prevYM = YearMonth.from(today).minusMonths(1);
             startDate = prevYM.atDay(1);
             endDate = prevYM.atEndOfMonth();
+        } else if ("this_week".equalsIgnoreCase(period)) {
+            startDate = today.with(java.time.DayOfWeek.MONDAY);
+            endDate = today.with(java.time.DayOfWeek.SUNDAY);
+        } else if ("last_7_days".equalsIgnoreCase(period)) {
+            startDate = today.minusDays(6);
+            endDate = today;
+        } else if ("last_30_days".equalsIgnoreCase(period)) {
+            startDate = today.minusDays(29);
+            endDate = today;
         } else if ("current_year".equalsIgnoreCase(period)) {
             startDate = LocalDate.of(today.getYear(), 1, 1);
             endDate = LocalDate.of(today.getYear(), 12, 31);
@@ -160,6 +210,12 @@ public class DashboardService {
     private String getPeriodDisplayName(String period, LocalDate start, LocalDate end) {
         if ("previous_month".equalsIgnoreCase(period)) {
             return start.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + start.getYear();
+        } else if ("this_week".equalsIgnoreCase(period)) {
+            return "This Week (" + start + " to " + end + ")";
+        } else if ("last_7_days".equalsIgnoreCase(period)) {
+            return "Last 7 Days";
+        } else if ("last_30_days".equalsIgnoreCase(period)) {
+            return "Last 30 Days";
         } else if ("current_year".equalsIgnoreCase(period)) {
             return "Year " + start.getYear();
         } else if ("custom".equalsIgnoreCase(period)) {

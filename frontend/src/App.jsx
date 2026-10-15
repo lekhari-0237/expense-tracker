@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import ExpenseAIChatbot from './components/ExpenseAIChatbot';
+import ApiConfigBanner from './components/ApiConfigBanner';
 
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -13,12 +14,14 @@ import AddTransactionPage from './pages/AddTransactionPage';
 import BankSyncPage from './pages/BankSyncPage';
 import IncomePage from './pages/IncomePage';
 import SavingsGoalsPage from './pages/SavingsGoalsPage';
+import BudgetsPage from './pages/BudgetsPage';
 import CalendarPage from './pages/CalendarPage';
 import SharedExpensesPage from './pages/SharedExpensesPage';
 import BillRemindersPage from './pages/BillRemindersPage';
 import LoansPage from './pages/LoansPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ExportPage from './pages/ExportPage';
+import ChatPage from './pages/ChatPage';
 
 const ProtectedLayout = () => {
   const { isAuthenticated } = useAuth();
@@ -34,13 +37,16 @@ const ProtectedLayout = () => {
       <div className="main-content">
         <Navbar onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="content-body">
+          <ApiConfigBanner />
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/chat" element={<ChatPage />} />
             <Route path="/add-transaction" element={<AddTransactionPage />} />
             <Route path="/bank-sync" element={<BankSyncPage />} />
             <Route path="/income" element={<IncomePage />} />
             <Route path="/export" element={<ExportPage />} />
             <Route path="/savings" element={<SavingsGoalsPage />} />
+            <Route path="/budgets" element={<BudgetsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/shared-expenses" element={<SharedExpensesPage />} />
             <Route path="/bills" element={<BillRemindersPage />} />

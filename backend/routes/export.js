@@ -1,167 +1,262 @@
 const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
-const User = require('../models/User');
 const { protect } = require('../middleware/authMiddleware');
+const { resolvePeriod, zonedTimeToUtc, formatDate } = require('../utils/dateUtil');
 
-function parseDateRange(period, customStart, customEnd) {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-
-    let startDate = null;
-    let endDate = new Date(now);
-
-    if (period === 'custom' && customStart && customEnd) {
-        startDate = new Date(customStart);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(customEnd);
-        endDate.setHours(23, 59, 59, 999);
-        return { startDate, endDate, label: `${customStart} to ${customEnd}` };
-    }
-
-    switch (period) {
-        case 'previous_month':
-        case 'last_month':
-            startDate = new Date(currentYear, currentMonth - 1, 1);
-            endDate = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
-            return { startDate, endDate, label: 'Previous Month' };
-        case 'current_year':
-            startDate = new Date(currentYear, 0, 1);
-            endDate = new Date(currentYear, 11, 31, 23, 59, 59, 999);
-            return { startDate, endDate, label: `Year ${currentYear}` };
-        case 'current_month':
-        default:
-            startDate = new Date(currentYear, currentMonth, 1);
-            endDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
-            return { startDate, endDate, label: 'Current Month' };
-    }
+function round2(n) {
+    return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 }
 
-// Generate simple valid standard PDF
-function generatePdfBuffer(userName, dateLabel, transactions, totalIncome, totalExpense, balance) {
-    // Generate standard PDF stream
-    const title = `Smart Expense Tracker Report`;
-    const subtitle = `User: ${userName || 'User'} | Period: ${dateLabel}`;
-    const summary = `Total Income: INR ${totalIncome.toFixed(2)}  |  Total Expense: INR ${totalExpense.toFixed(2)}  |  Net Balance: INR ${balance.toFixed(2)}`;
-    
-    let contentStream = `BT\n/F1 18 Tf\n50 750 Td\n(${title}) Tj\nET\n`;
-    contentStream += `BT\n/F1 11 Tf\n50 730 Td\n(${subtitle}) Tj\nET\n`;
-    contentStream += `BT\n/F1 11 Tf\n50 710 Td\n(${summary}) Tj\nET\n`;
-    contentStream += `50 695 m 550 695 l S\n`; // Horizontal line
-    
-    // Table Headers
-    contentStream += `BT\n/F2 10 Tf\n50 680 Td\n(Date) Tj\nET\n`;
-    contentStream += `BT\n/F2 10 Tf\n120 680 Td\n(Type) Tj\nET\n`;
-    contentStream += `BT\n/F2 10 Tf\n180 680 Td\n(Category) Tj\nET\n`;
-    contentStream += `BT\n/F2 10 Tf\n280 680 Td\n(Description) Tj\nET\n`;
-    contentStream += `BT\n/F2 10 Tf\n480 680 Td\n(Amount (INR)) Tj\nET\n`;
-    contentStream += `50 672 m 550 672 l S\n`;
-
-    let y = 655;
-    const maxTxns = Math.min(transactions.length, 30); // show up to 30 transactions on page
-    for (let i = 0; i < maxTxns; i++) {
-        const t = transactions[i];
-        const dStr = t.date ? new Date(t.date).toISOString().split('T')[0] : '';
-        const typeStr = (t.type || 'EXPENSE').toUpperCase();
-        const catStr = (t.category || 'General').substring(0, 15).replace(/[()\\]/g, '');
-        const descStr = (t.description || t.merchant || '').substring(0, 30).replace(/[()\\]/g, '');
-        const amtStr = `${typeStr === 'INCOME' ? '+' : '-'} INR ${t.amount.toFixed(2)}`;
-
-        contentStream += `BT\n/F1 9 Tf\n50 ${y} Td\n(${dStr}) Tj\nET\n`;
-        contentStream += `BT\n/F1 9 Tf\n120 ${y} Td\n(${typeStr}) Tj\nET\n`;
-        contentStream += `BT\n/F1 9 Tf\n180 ${y} Td\n(${catStr}) Tj\nET\n`;
-        contentStream += `BT\n/F1 9 Tf\n280 ${y} Td\n(${descStr}) Tj\nET\n`;
-        contentStream += `BT\n/F1 9 Tf\n480 ${y} Td\n(${amtStr}) Tj\nET\n`;
-        y -= 18;
+// Custom ranges are wall-clock days in APP_TIMEZONE, so "2026-10-01" means October
+// 1st for the user, not the UTC instant a browser would guess.
+function customRange(startStr, endStr) {
+    const s = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(startStr || ''));
+    const e = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(endStr || ''));
+    if (!s || !e) return null;
+    let start = { y: +s[1], m: +s[2], d: +s[3] };
+    let end = { y: +e[1], m: +e[2], d: +e[3] };
+    if (end.y * 10000 + end.m * 100 + end.d < start.y * 10000 + start.m * 100 + start.d) {
+        [start, end] = [end, start];
     }
-
-    if (transactions.length > maxTxns) {
-        contentStream += `BT\n/F1 9 Tf\n50 ${y} Td\n(... and ${transactions.length - maxTxns} more transactions) Tj\nET\n`;
-    }
-
-    // PDF Object structure
-    const obj1 = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
-    const obj2 = `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n`;
-    const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n`;
-    const obj4 = `4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n`;
-    const obj5 = `5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n`;
-    const obj6 = `6 0 obj\n<< /Length ${Buffer.byteLength(contentStream, 'utf8')} >>\nstream\n${contentStream}\nendstream\nendobj\n`;
-
-    const header = `%PDF-1.4\n`;
-    const objects = [obj1, obj2, obj3, obj4, obj5, obj6];
-    let offset = header.length;
-    const xref = [`xref\n0 7\n0000000000 65535 f \n`];
-
-    for (let i = 0; i < objects.length; i++) {
-        xref.push(String(offset).padStart(10, '0') + ' 00000 n \n');
-        offset += Buffer.byteLength(objects[i], 'utf8');
-    }
-
-    const xrefOffset = offset;
-    const trailer = `trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
-
-    const pdfString = header + objects.join('') + xref.join('') + trailer;
-    return Buffer.from(pdfString, 'utf8');
+    return {
+        startDate: zonedTimeToUtc(start.y, start.m, start.d, 0, 0, 0, 0),
+        endDate: zonedTimeToUtc(end.y, end.m, end.d, 23, 59, 59, 999),
+        label: `${start.y}-${String(start.m).padStart(2, '0')}-${String(start.d).padStart(2, '0')} to ${end.y}-${String(end.m).padStart(2, '0')}-${String(end.d).padStart(2, '0')}`
+    };
 }
 
-// Generate Excel XML Spreadsheet (native compatibility with MS Excel & LibreOffice)
-function generateExcelXml(userName, dateLabel, transactions, totalIncome, totalExpense, balance) {
-    let rowsXml = '';
+function resolveRange(query) {
+    const custom = customRange(query.startDate, query.endDate);
+    if (custom) return custom;
+    return resolvePeriod(query.period || 'current_month');
+}
 
-    // Summary Header rows
-    rowsXml += `
-    <Row>
-      <Cell><Data ss:Type="String">Smart Expense Tracker Financial Report</Data></Cell>
-    </Row>
-    <Row>
-      <Cell><Data ss:Type="String">User: ${userName || 'User'}</Data></Cell>
-      <Cell><Data ss:Type="String">Period: ${dateLabel}</Data></Cell>
-    </Row>
-    <Row>
-      <Cell><Data ss:Type="String">Total Income (₹):</Data></Cell>
-      <Cell><Data ss:Type="Number">${totalIncome}</Data></Cell>
-    </Row>
-    <Row>
-      <Cell><Data ss:Type="String">Total Expense (₹):</Data></Cell>
-      <Cell><Data ss:Type="Number">${totalExpense}</Data></Cell>
-    </Row>
-    <Row>
-      <Cell><Data ss:Type="String">Net Savings / Balance (₹):</Data></Cell>
-      <Cell><Data ss:Type="Number">${balance}</Data></Cell>
-    </Row>
-    <Row></Row>
-    <Row>
-      <Cell ss:StyleID="Header"><Data ss:Type="String">Date</Data></Cell>
-      <Cell ss:StyleID="Header"><Data ss:Type="String">Type</Data></Cell>
-      <Cell ss:StyleID="Header"><Data ss:Type="String">Category</Data></Cell>
-      <Cell ss:StyleID="Header"><Data ss:Type="String">Description</Data></Cell>
-      <Cell ss:StyleID="Header"><Data ss:Type="String">Merchant</Data></Cell>
-      <Cell ss:StyleID="Header"><Data ss:Type="String">Source</Data></Cell>
-      <Cell ss:StyleID="Header"><Data ss:Type="String">Amount (INR)</Data></Cell>
-    </Row>
-  `;
+function isIncome(type) {
+    return String(type || '').toUpperCase() === 'INCOME';
+}
 
-    transactions.forEach(t => {
-        const dStr = t.date ? new Date(t.date).toISOString().split('T')[0] : '';
-        const typeStr = (t.type || 'EXPENSE').toUpperCase();
-        const catStr = (t.category || 'General').replace(/[<>&'"]/g, '');
-        const descStr = (t.description || '').replace(/[<>&'"]/g, '');
-        const merchStr = (t.merchant || '').replace(/[<>&'"]/g, '');
-        const srcStr = (t.source || 'manual').replace(/[<>&'"]/g, '');
+function summarize(transactions) {
+    let income = 0;
+    let expense = 0;
+    for (const t of transactions) {
+        const amt = Number(t.amount) || 0;
+        if (isIncome(t.type)) income += amt;
+        else expense += amt;
+    }
+    return { income: round2(income), expense: round2(expense), balance: round2(income - expense), count: transactions.length };
+}
 
-        rowsXml += `
-      <Row>
-        <Cell><Data ss:Type="String">${dStr}</Data></Cell>
-        <Cell><Data ss:Type="String">${typeStr}</Data></Cell>
-        <Cell><Data ss:Type="String">${catStr}</Data></Cell>
-        <Cell><Data ss:Type="String">${descStr}</Data></Cell>
-        <Cell><Data ss:Type="String">${merchStr}</Data></Cell>
-        <Cell><Data ss:Type="String">${srcStr}</Data></Cell>
-        <Cell><Data ss:Type="Number">${t.amount}</Data></Cell>
-      </Row>
-    `;
+async function loadReport(userId, query) {
+    const { startDate, endDate, label } = resolveRange(query);
+    const dateQuery = { user: userId };
+    if (startDate && endDate) dateQuery.date = { $gte: startDate, $lte: endDate };
+
+    const docs = await Transaction.find(dateQuery).sort({ date: -1, createdAt: -1 });
+    const rows = docs.map(t => ({
+        date: formatDate(t.date),
+        type: isIncome(t.type) ? 'INCOME' : 'EXPENSE',
+        category: t.category || 'General',
+        description: t.description || t.merchant || t.category || '',
+        merchant: t.merchant || '',
+        source: t.source || 'manual',
+        paymentMethod: t.paymentMethod || '',
+        notes: t.notes || '',
+        amount: round2(Number(t.amount) || 0)
+    }));
+
+    return { rows, totals: summarize(rows), label, startDate, endDate };
+}
+
+// ---------------------------------------------------------------- PDF ---------
+// The 14 core PDF fonts carry no rupee glyph, so amounts are labelled "INR" here.
+// Column x positions are chosen for 9pt Helvetica (~4.8pt per character) so the
+// clipped text of one column never runs under the next one.
+const PDF_COLUMNS = [
+    { key: 'date', title: 'Date', x: 40, max: 10 },
+    { key: 'type', title: 'Type', x: 90, max: 7 },
+    { key: 'category', title: 'Category', x: 128, max: 16 },
+    { key: 'description', title: 'Description', x: 210, max: 24 },
+    { key: 'paymentMethod', title: 'Method', x: 330, max: 14 },
+    { key: 'notes', title: 'Notes', x: 402, max: 24 },
+    { key: 'amount', title: 'Amount INR', x: 522, max: 12 }
+];
+
+const PDF_LEFT = 40;
+const PDF_RIGHT = 572;
+const PDF_TOP = 750;
+const PDF_BOTTOM = 56;
+const PDF_ROW_HEIGHT = 15;
+
+function pdfText(value) {
+    // PDF literal strings: only ASCII is safe without an embedded font, and
+    // \ ( ) must be escaped. Stripping is limited to what the encoding cannot hold.
+    const clipped = String(value === null || value === undefined ? '' : value)
+        .replace(/\r?\n/g, ' ')
+        .slice(0, 200);
+    return clipped
+        .split('')
+        .map(ch => {
+            const code = ch.charCodeAt(0);
+            if (code === 92 || code === 40 || code === 41) return '\\' + ch;
+            if (code < 32 || code > 126) return '?';
+            return ch;
+        })
+        .join('');
+}
+
+function clipTo(value, maxChars) {
+    const s = String(value || '');
+    return s.length > maxChars ? `${s.slice(0, Math.max(1, maxChars - 3))}...` : s;
+}
+
+function pdfRow(x, y, text, font = 'F1', size = 9) {
+    return `BT\n/${font} ${size} Tf\n${x} ${y} Td\n(${pdfText(text)}) Tj\nET\n`;
+}
+
+function pdfRule(y) {
+    return `${PDF_LEFT} ${y} m ${PDF_RIGHT} ${y} l S\n`;
+}
+
+function pdfTableHeader(y) {
+    let out = pdfRule(y + 12);
+    for (const col of PDF_COLUMNS) out += pdfRow(col.x, y, col.title, 'F2', 9);
+    out += pdfRule(y + 4);
+    return out;
+}
+
+function assemblePdf(pagesContent) {
+    const pageCount = pagesContent.length;
+    // 1 Catalog, 2 Pages root, 3/4 fonts, then page + content pair per page.
+    const firstPageObj = 5;
+    const kids = [];
+    for (let i = 0; i < pageCount; i++) kids.push(`${firstPageObj + i * 2} 0 R`);
+
+    const objects = [];
+    objects.push(`1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`);
+    objects.push(`2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pageCount} >>\nendobj\n`);
+    objects.push(`3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n`);
+    objects.push(`4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n`);
+
+    pagesContent.forEach((content, i) => {
+        const pageNum = firstPageObj + i * 2;
+        const contentNum = pageNum + 1;
+        objects.push(`${pageNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] `
+            + `/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentNum} 0 R >>\nendobj\n`);
+        objects.push(`${contentNum} 0 obj\n<< /Length ${Buffer.byteLength(content, 'utf8')} >>\nstream\n${content}\nendstream\nendobj\n`);
     });
+
+    let out = `%PDF-1.4\n`;
+    const xrefRows = ['0000000000 65535 f \n'];
+    for (const obj of objects) {
+        xrefRows.push(`${String(Buffer.byteLength(out, 'utf8')).padStart(10, '0')} 00000 n \n`);
+        out += obj;
+    }
+    const startxref = Buffer.byteLength(out, 'utf8');
+    out += `xref\n0 ${objects.length + 1}\n${xrefRows.join('')}`;
+    out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF\n`;
+    return Buffer.from(out, 'utf8');
+}
+
+function generatePdfBuffer(userName, dateLabel, rows, totals) {
+    const generatedOn = formatDate(new Date());
+    const summary = `Income INR ${totals.income.toFixed(2)}   Expense INR ${totals.expense.toFixed(2)}   Net INR ${totals.balance.toFixed(2)}   Transactions ${totals.count}`;
+
+    const pages = [];
+    let index = 0;
+    let pageIndex = 0;
+
+    do {
+        const isFirstPage = pageIndex === 0;
+        let y = isFirstPage ? PDF_TOP : PDF_TOP - 10;
+        let content = '';
+
+        if (isFirstPage) {
+            content += pdfRow(PDF_LEFT, y, 'Smart Expense Tracker Report', 'F2', 17); y -= 18;
+            content += pdfRow(PDF_LEFT, y, `User: ${userName || 'User'}   Period: ${dateLabel}   Generated: ${generatedOn}`, 'F1', 10); y -= 15;
+            content += pdfRow(PDF_LEFT, y, summary, 'F1', 10); y -= 14;
+        } else {
+            content += pdfRow(PDF_LEFT, y, `Smart Expense Tracker Report - ${dateLabel} (continued)`, 'F2', 11); y -= 12;
+        }
+
+        content += pdfTableHeader(y - 6);
+        y -= 22;
+
+        const capacity = Math.floor((y - PDF_BOTTOM) / PDF_ROW_HEIGHT) + 1;
+        const end = Math.min(index + capacity, rows.length);
+        for (; index < end; index++) {
+            const row = rows[index];
+            content += pdfRow(PDF_COLUMNS[0].x, y, row.date);
+            content += pdfRow(PDF_COLUMNS[1].x, y, row.type);
+            content += pdfRow(PDF_COLUMNS[2].x, y, clipTo(row.category, PDF_COLUMNS[2].max));
+            content += pdfRow(PDF_COLUMNS[3].x, y, clipTo(row.description || row.merchant, PDF_COLUMNS[3].max));
+            content += pdfRow(PDF_COLUMNS[4].x, y, clipTo(row.paymentMethod || '-', PDF_COLUMNS[4].max));
+            content += pdfRow(PDF_COLUMNS[5].x, y, clipTo(row.notes, PDF_COLUMNS[5].max));
+            content += pdfRow(PDF_COLUMNS[6].x, y, clipTo(`${row.type === 'INCOME' ? '+' : '-'}${row.amount.toFixed(2)}`, PDF_COLUMNS[6].max));
+            y -= PDF_ROW_HEIGHT;
+        }
+
+        if (rows.length === 0) {
+            content += pdfRow(PDF_COLUMNS[0].x, y, 'No transactions recorded for this period.', 'F1', 10);
+        }
+
+        pages.push(content);
+        pageIndex++;
+    } while (index < rows.length);
+
+    const total = pages.length;
+    const bodies = pages.map((content, i) => {
+        let footer = pdfRule(46);
+        footer += pdfRow(PDF_LEFT, 34, `Page ${i + 1} of ${total}`, 'F1', 8);
+        footer += pdfRow(PDF_RIGHT - 150, 34, `Net balance INR ${totals.balance.toFixed(2)}`, 'F1', 8);
+        return content + footer;
+    });
+
+    return assemblePdf(bodies);
+}
+
+// ------------------------------------------------------------ EXCEL ----------
+// SpreadsheetML 2003 (the format Excel opens as .xls). Producing a real .xlsx would
+// need a zipped OOXML writer, so the payload keeps its honest name and MIME type.
+function xmlEscape(value) {
+    return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+function xmlCell(value, type = 'String', styleId = null) {
+    const style = styleId ? ` ss:StyleID="${styleId}"` : '';
+    return `<Cell${style}><Data ss:Type="${type}">${type === 'String' ? xmlEscape(value) : value}</Data></Cell>`;
+}
+
+function generateExcelXml(userName, dateLabel, rows, totals, generatedOn) {
+    const headerTitles = ['Date', 'Type', 'Category', 'Description', 'Merchant', 'Source', 'Payment method', 'Notes', 'Amount (INR)'];
+
+    let body = `<Row>${xmlCell('Smart Expense Tracker Financial Report', 'String', 'Title')}</Row>\n`;
+    body += `<Row>${xmlCell(`User: ${userName || 'User'}`)}${xmlCell(`Period: ${dateLabel}`)}${xmlCell(`Generated: ${generatedOn}`)}</Row>\n`;
+    body += `<Row>${xmlCell('Total Income (INR):')}${xmlCell(totals.income.toFixed(2), 'Number')}</Row>\n`;
+    body += `<Row>${xmlCell('Total Expense (INR):')}${xmlCell(totals.expense.toFixed(2), 'Number')}</Row>\n`;
+    body += `<Row>${xmlCell('Net Savings / Balance (INR):')}${xmlCell(totals.balance.toFixed(2), 'Number')}</Row>\n`;
+    body += `<Row>${xmlCell('Transactions:')}${xmlCell(totals.count, 'Number')}</Row>\n`;
+    body += `<Row></Row>\n`;
+    body += `<Row>${headerTitles.map(t => xmlCell(t, 'String', 'Header')).join('')}</Row>\n`;
+
+    for (const row of rows) {
+        body += '<Row>' + [
+            xmlCell(row.date),
+            xmlCell(row.type),
+            xmlCell(row.category),
+            xmlCell(row.description),
+            xmlCell(row.merchant),
+            xmlCell(row.source),
+            xmlCell(row.paymentMethod),
+            xmlCell(row.notes),
+            xmlCell(row.amount.toFixed(2), 'Number')
+        ].join('') + '</Row>\n';
+    }
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -170,24 +265,19 @@ function generateExcelXml(userName, dateLabel, transactions, totalIncome, totalE
  xmlns:x="urn:schemas-microsoft-com:office:excel"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
  <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Bottom"/>
-  </Style>
+  <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Bottom"/></Style>
+  <Style ss:ID="Title"><Font ss:Bold="1" ss:Size="13" ss:Color="#111827"/></Style>
   <Style ss:ID="Header">
    <Font ss:Bold="1" ss:Color="#FFFFFF"/>
    <Interior ss:Color="#2563EB" ss:Pattern="Solid"/>
   </Style>
  </Styles>
  <Worksheet ss:Name="Transactions">
-  <Table>
-    <Column ss:Width="90"/>
-    <Column ss:Width="80"/>
-    <Column ss:Width="110"/>
-    <Column ss:Width="180"/>
-    <Column ss:Width="120"/>
-    <Column ss:Width="90"/>
-    <Column ss:Width="100"/>
-    ${rowsXml}
+  <Table ss:StyleID="Default">
+    <Column ss:Width="80"/><Column ss:Width="60"/><Column ss:Width="100"/>
+    <Column ss:Width="170"/><Column ss:Width="110"/><Column ss:Width="70"/>
+    <Column ss:Width="90"/><Column ss:Width="150"/><Column ss:Width="90"/>
+    ${body}
   </Table>
  </Worksheet>
 </Workbook>`;
@@ -196,28 +286,11 @@ function generateExcelXml(userName, dateLabel, transactions, totalIncome, totalE
 // GET /api/export/pdf
 router.get('/pdf', protect, async (req, res) => {
     try {
-        const { period, startDate, endDate } = req.query;
-        const { startDate: sDate, endDate: eDate, label } = parseDateRange(period, startDate, endDate);
-
-        const dateQuery = { user: req.user._id };
-        if (sDate && eDate) {
-            dateQuery.date = { $gte: sDate, $lte: eDate };
-        }
-
-        const transactions = await Transaction.find(dateQuery).sort({ date: -1 });
-
-        let totalIncome = 0;
-        let totalExpense = 0;
-        transactions.forEach(t => {
-            if (t.type === 'INCOME' || t.type === 'income') totalIncome += t.amount;
-            else totalExpense += t.amount;
-        });
-
-        const balance = totalIncome - totalExpense;
-        const pdfBuffer = generatePdfBuffer(req.user.name, label, transactions, totalIncome, totalExpense, balance);
+        const { rows, totals, label } = await loadReport(req.user._id, req.query);
+        const pdfBuffer = generatePdfBuffer(req.user.username, label, rows, totals);
 
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="ExpenseTracker_Report_${period || 'month'}.pdf"`);
+        res.setHeader('Content-Disposition', `attachment; filename="ExpenseTracker_Report_${req.query.period || 'month'}.pdf"`);
         res.send(pdfBuffer);
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -227,28 +300,11 @@ router.get('/pdf', protect, async (req, res) => {
 // GET /api/export/excel
 router.get('/excel', protect, async (req, res) => {
     try {
-        const { period, startDate, endDate } = req.query;
-        const { startDate: sDate, endDate: eDate, label } = parseDateRange(period, startDate, endDate);
+        const { rows, totals, label } = await loadReport(req.user._id, req.query);
+        const excelXml = generateExcelXml(req.user.username, label, rows, totals, formatDate(new Date()));
 
-        const dateQuery = { user: req.user._id };
-        if (sDate && eDate) {
-            dateQuery.date = { $gte: sDate, $lte: eDate };
-        }
-
-        const transactions = await Transaction.find(dateQuery).sort({ date: -1 });
-
-        let totalIncome = 0;
-        let totalExpense = 0;
-        transactions.forEach(t => {
-            if (t.type === 'INCOME' || t.type === 'income') totalIncome += t.amount;
-            else totalExpense += t.amount;
-        });
-
-        const balance = totalIncome - totalExpense;
-        const excelXml = generateExcelXml(req.user.name, label, transactions, totalIncome, totalExpense, balance);
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="ExpenseTracker_Report_${period || 'month'}.xlsx"`);
+        res.setHeader('Content-Type', 'application/vnd.ms-excel');
+        res.setHeader('Content-Disposition', `attachment; filename="ExpenseTracker_Report_${req.query.period || 'month'}.xls"`);
         res.send(Buffer.from(excelXml, 'utf8'));
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

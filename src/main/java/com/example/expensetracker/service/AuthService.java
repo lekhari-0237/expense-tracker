@@ -14,11 +14,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     @Autowired
     private UserRepository userRepository;
@@ -32,7 +36,6 @@ public class AuthService {
     @Autowired
     private JwtTokenProvider tokenProvider;
 
-    @Transactional
     public User registerUser(RegisterRequest registerRequest) {
         if (!registerRequest.getPassword().equals(registerRequest.getConfirmPassword())) {
             throw new BadRequestException("Password and Confirm Password do not match");
@@ -65,6 +68,11 @@ public class AuthService {
 
             return new AuthResponse(jwt, userPrincipal.getId(), userPrincipal.getUsername());
         } catch (Exception ex) {
+            log.warn("Login failed for user '{}': {} - {}",
+                    authRequest != null ? authRequest.getUsername() : "null",
+                    ex.getClass().getName(),
+                    ex.getMessage(),
+                    ex);
             throw new BadRequestException("Invalid username or password");
         }
     }

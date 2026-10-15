@@ -9,6 +9,9 @@ backend/node_modules/
 .env.*
 backend/.env
 frontend/.env
+# ...but the secret-free templates must stay tracked so setup is reproducible.
+!.env.example
+!frontend/.env.example
 
 # Build outputs
 dist/

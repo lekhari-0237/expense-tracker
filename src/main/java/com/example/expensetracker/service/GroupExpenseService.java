@@ -68,7 +68,7 @@ public class GroupExpenseService {
     }
 
     @Transactional
-    public GroupDto addMemberToGroup(Long groupId, String memberName) {
+    public GroupDto addMemberToGroup(String groupId, String memberName) {
         User currentUser = authService.getCurrentAuthenticatedUser();
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found with id: " + groupId));
@@ -81,7 +81,7 @@ public class GroupExpenseService {
     }
 
     @Transactional
-    public GroupExpenseDto addExpenseToGroup(Long groupId, GroupExpenseDto dto) {
+    public GroupExpenseDto addExpenseToGroup(String groupId, GroupExpenseDto dto) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found with id: " + groupId));
 
@@ -120,14 +120,14 @@ public class GroupExpenseService {
     }
 
     @Transactional
-    public void markSplitAsSettled(Long splitId) {
+    public void markSplitAsSettled(String splitId) {
         GroupExpenseSplit split = groupExpenseSplitRepository.findById(splitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense split not found with id: " + splitId));
         split.setIsSettled(true);
         groupExpenseSplitRepository.save(split);
     }
 
-    public List<Map<String, Object>> getGroupBalances(Long groupId) {
+    public List<Map<String, Object>> getGroupBalances(String groupId) {
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found with id: " + groupId));
 
